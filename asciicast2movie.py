@@ -33,7 +33,7 @@ def render_asciicast_frames(
 		renderOptions = {}
 	):
 	'''Convert asciicast frames data to moviepy video clip
-	
+
 	Parameters
 	----------
 	inputData : list of lists
@@ -51,21 +51,23 @@ def render_asciicast_frames(
 	    last frame duration time in seconds
 	renderOptions : dict, optional
 	    options passed to tty2img
-	
+
 	Returns
 	-------
 	    moviepy video clip
 	'''
 	clips = []
 	nextFrameStartTimes = list( zip(*inputData[1:], [ inputData[-1][0] + lastFrameDuration ]) )[0]
+	tty = tty2img.tty2img(screen, showCursor=True, **renderOptions)
 	for frame, endTime in zip(inputData, nextFrameStartTimes):
 		startTime = frame[0]
 		cursor = 0
-		
+
 		# prepare current frame image clips
 		stream.feed(frame[-1])
 		imageClip, imageCursorOn, imageCursorOff = None, None, None
 		while startTime < endTime:
+			print(startTime, endTime)
 			# blinking cursor support
 			if blinkingCursor and (not screen.cursor.hidden):
 				# calculate frame duration
@@ -82,22 +84,22 @@ def render_asciicast_frames(
 				# switch cursor
 				if cursor%2 == 0:
 					if imageCursorOn == None:
-						imageCursorOn = tty2img.tty2img(screen, showCursor=True, **renderOptions)
+						imageCursorOn = tty.render(screen)
 						imageCursorOn = mpy.ImageClip(numpy.array( imageCursorOn ))
 					imageClip = imageCursorOn
 				else:
 					if imageCursorOff == None:
-						imageCursorOff = tty2img.tty2img(screen, showCursor=False, **renderOptions)
+						imageCursorOff = tty.render(screen)
 						imageCursorOff = mpy.ImageClip(numpy.array( imageCursorOff ))
 					imageClip = imageCursorOff
 				cursor += 1
 			else:
-				imageClip = mpy.ImageClip(numpy.array( tty2img.tty2img(screen, **renderOptions) ))
+				imageClip = mpy.ImageClip(numpy.array( tty.render(screen) ))
 				duration  = endTime-startTime
 				startTime = endTime
 			# subframe rendering
 			clips.append( imageClip.set_duration(duration) )
-	
+
 	return mpy.concatenate_videoclips(clips)
 
 def asciicast2video(
@@ -110,7 +112,7 @@ def asciicast2video(
 		continueOnLowMem = False
 	):
 	'''Convert asciicast data to moviepy video clip
-	
+
 	Parameters
 	----------
 	inputData
@@ -141,18 +143,18 @@ def asciicast2video(
 		when False exit on low memory warring
 		when True  ignore low memory warring and continue rendering
 		when None  interactive ask
-	
+
 	Returns
 	-------
 	    moviepy video clip
 	'''
-	
+
 	if isinstance(inputData, str):
 		if '\n' in inputData:
 			inputData = io.StringIO(inputData)
 		else:
 			inputData = open(inputData, 'r')
-	
+
 	# when not set width and height, read its from first line
 	if not width or not height:
 		if isinstance(inputData, list):
@@ -160,27 +162,28 @@ def asciicast2video(
 		settings = json.loads(inputData.readline())
 		width  = settings['width']
 		height = settings['height']
-	
+
 	# create VT100 terminal emulator
 	screen = pyte.Screen(width, height)
 	stream = pyte.Stream(screen)
-	
+
 	# convert input to list of list
 	inputFrames = []
 	for frame in inputData:
 		if isinstance(frame, str):
 			frame = json.loads(frame)
 		inputFrames.append( (frame[0], frame[-1]) )
-	
+
 	# calculate memory needs
-	frameSize = tty2img.tty2img(screen, **renderOptions).size
+	tty = tty2img.tty2img(screen, **renderOptions)
+	frameSize = tty.render(screen).size
 	frameSize = frameSize[0] * frameSize[1] * 4
 	frameCount = len(inputFrames)
 	if blinkingCursor:
 		frameCount += math.ceil( (inputFrames[-1][0] - inputFrames[0][0]) / (1.5 * blinkingCursor) )
 	needMem = frameSize * frameCount * 3 / 1024
 	print("Rendering this file needs about " + str(int(needMem/1024)) + "MB of memory." )
-	
+
 	# check available memory (linux only)
 	try:
 		meminfo = open("/proc/meminfo")
@@ -202,7 +205,7 @@ def asciicast2video(
 				break
 	except FileNotFoundError:
 		pass
-	
+
 	# render frames
 	return render_asciicast_frames(
 		inputFrames, screen, stream, blinkingCursor, lastFrameDuration, renderOptions
@@ -210,12 +213,12 @@ def asciicast2video(
 
 def main():
 	import sys
-	
+
 	if len(sys.argv) != 3:
 		print("USAGE: " + sys.argv[0] + " asciicast_file output_video_file")
 		sys.exit(1)
-	
-	video = asciicast2video(sys.argv[1], blinkingCursor=0.5, renderOptions={'fontSize':12}, continueOnLowMem=None)
+
+	video = asciicast2video(sys.argv[1], blinkingCursor=0.5, continueOnLowMem=True, renderOptions={'fontSize': 20, 'marginSize': 0})
 	video.write_videofile(sys.argv[2], fps=24)
 
 if __name__ == "__main__":
