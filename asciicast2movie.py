@@ -218,7 +218,7 @@ def main():
 		print("USAGE: " + sys.argv[0] + " asciicast_file output_video_file")
 		sys.exit(1)
 
-	video = asciicast2video(sys.argv[1], blinkingCursor=0.5, continueOnLowMem=True, renderOptions={'fontSize': 20, 'marginSize': 0})
+	video = asciicast2video(sys.argv[1], continueOnLowMem=True, renderOptions={'fontSize': 20, 'marginSize': 0})
 	video.write_videofile(sys.argv[2], fps=24)
 
 if __name__ == "__main__":
